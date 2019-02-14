@@ -1,0 +1,163 @@
+#!/usr/bin/perl
+#
+
+$debug = 0;
+
+if (!$debug) {
+  use Proc::Daemon;
+  $pid = Proc::Daemon::Init;
+  exit if $pid;
+}
+
+use Graphics::Magick;
+use GD;
+use Graphics::ColorObject;
+use Net::Ping;
+
+# also needs https://www.floodgap.com/software/huepl/
+
+$infile = "/tmp/latest.jpg";
+$tmpfile = "/tmp/9x9.jpg";
+$tmpfile2 = "/tmp/color.jpg";
+$tv = "tv.garf.de";
+$right = 6;
+$left = 5;
+
+$tvping = Net::Ping->new("icmp",2,0);
+
+# wait until TV is switched on
+&waitfortv;
+
+$noping = 0;
+while (1) {
+ 
+  # Take picture of TV screen
+  system("raspistill -o $infile -drc high -mm matrix $EXPO -rot 90 -w 320 -h 240 -t 1");
+
+  # Read picture into memory
+  my $im = Graphics::Magick->new;
+  $err = $im->Read($infile);
+  warn $err if $err;
+
+  # If necessary, crop picture
+  # $im->Crop.....
+
+
+  # Generate 9x9 pixeliced version of picture
+  $im->Modulate(saturation => 800.0,brightness => 200.0, hue => 100.0);
+  $im->Write($tmpfile2);
+  $im->Resize(width => 9, height => 9);
+  # Write it to RAMdisk
+  $im->Write($tmpfile);
+
+  # and read it in again
+  my $gd = GD::Image->newFromJpeg($tmpfile);
+
+  # get color of pixel in top row, middle
+
+  my @l= $gd->rgb($gd->getPixel(2,2));
+  my @r= $gd->rgb($gd->getPixel(7,2));
+
+  my @sleft = sort @l;
+  my @sright= sort @r;
+
+  my $lmin = $sleft[0];
+  my $rmin = $sright[0];
+  my $lmax = $sleft[2];
+  my $rmax = $sright[2];
+  
+  my @ldist = (abs($sleft[0]-$sleft[1]),
+               abs($sleft[0]-$sleft[2]),
+               abs($sleft[2]-$sleft[1]));
+  my @rdist = (abs($sright[0]-$sright[1]),
+               abs($sright[0]-$sright[2]),
+               abs($sright[2]-$sright[1]));
+
+  my @srdist = sort @rdist;
+  my @sldist = sort @ldist;
+
+  if ($srdist[2] > 50) {
+    $or = mymap($r[0],$sright[0],$sright[2],0,255);
+    $og = mymap($r[1],$sright[0],$sright[2],0,255);
+    $ob = mymap($r[2],$sright[0],$sright[2],0,255);
+    $coltemp = 0;
+    print `huepl rgb $right $or $og $ob` if !$debug;
+  } else {
+    $or = $r[0];
+    $og = $r[1];
+    $ob = $r[2];
+    $coltemp = colTemp($or,$og,$ob);
+    print `huepl rgb $right $or $og $ob` if !$debug;
+    #print `huepl ct $right $coltemp` if !$debug;
+  }
+  print "right $or $og $ob $coltemp\n" if $debug;
+
+  if ($sldist[2] > 50) {
+    $or = mymap($l[0],$sleft[0],$sleft[2],0,255);
+    $og = mymap($l[1],$sleft[0],$sleft[2],0,255);
+    $ob = mymap($l[2],$sleft[0],$sleft[2],0,255);
+    $coltemp = 0;
+    print `huepl rgb $left $or $og $ob` if !$debug;
+  } else {
+    $or = $l[0];
+    $og = $l[1];
+    $ob = $l[2];
+    $coltemp = colTemp($or,$og,$ob);
+    print `huepl rgb $left $or $og $ob` if !$debug;
+    #print `huepl ct $left $coltemp` if !$debug;
+  }
+  print "left $or $og $ob $coltemp\n" if $debug;
+
+  exit if $debug;
+
+  #
+  # check reacability
+  #
+  if (!$tvping->ping($tv,1)) {
+    $noping++;
+    if ($noping > 3) {
+      # switch light to on
+      system("huepl bri $right 254");
+      system("huepl ct $right 367");
+      system("huepl bri $left 254");
+      system("huepl ct $left 367");
+      &waitfortv;
+      $noping = 0;
+    }
+  }
+}
+
+sub waitfortv {
+  return 1 if $debug;
+  while (!$tvping->ping($tv,5)) {
+    sleep(1);
+  }
+}
+
+sub mymap {
+  my ($x, $in_min, $in_max, $out_min, $out_max) = @_;
+  if ($x == $in_max) {
+     return $out_max;
+  } elsif ($out_min < $out_max) {
+    return ($x - $in_min) * ($out_max - $out_min+1) / ($in_max - $in_min) + $out_min;
+  } else {
+    return ($x - $in_min) * ($out_max - $out_min-1) / ($in_max - $in_min) + $out_min;
+  }
+}
+
+sub colTemp {
+  my ($r,$g,$b) = @_;
+
+  my $x = (-0.14282 * $r) + (1.54924 * $g) + (-0.95641 * $b);
+  my $y = (-0.32466 * $r) + (1.57837 * $g) + (-0.73191 * $b);
+  my $z = (-0.68202 * $r) + (0.77073 * $g) + (0.56332 * $b);
+
+  my $xc = $x / ($x+$y+$z);
+  my $yc = $y / ($x+$y+$z);
+
+  my $n = ($xc - 0.3320) / (0.1858 - $yc);
+
+  my $cct = (449.0 * n^3) + (3525.0 * n^2) + (6823.3 * n) + 5520.33;
+
+  return int(1000000 / $cct);
+}
