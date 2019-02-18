@@ -2,8 +2,9 @@
 #
 
 $debug = 0;
+$background = 0;
 
-if (!$debug) {
+if (!$debug && $background) {
   use Proc::Daemon;
   $pid = Proc::Daemon::Init;
   exit if $pid;
@@ -44,7 +45,7 @@ while (1) {
 
 
   # Generate 9x9 pixeliced version of picture
-  $im->Modulate(saturation => 800.0,brightness => 200.0, hue => 100.0);
+  # $im->Modulate(saturation => 800.0,brightness => 200.0, hue => 100.0);
   $im->Write($tmpfile2);
   $im->Resize(width => 9, height => 9);
   # Write it to RAMdisk
@@ -55,11 +56,18 @@ while (1) {
 
   # get color of pixel in top row, middle
 
-  my @l= $gd->rgb($gd->getPixel(2,2));
-  my @r= $gd->rgb($gd->getPixel(7,2));
+  my @l= $gd->rgb($gd->getPixel(2,3));
+  my @r= $gd->rgb($gd->getPixel(7,3));
 
-  my @sleft = sort @l;
-  my @sright= sort @r;
+  # for ($i=0;$i<9;$i++) {
+  #   my @pixel = $gd->rgb($gd->getPixel(7,$i));
+  #   print "$i " . $pixel[0] . " " . $pixel[1] . " " . $pixel[2] . "\n ";
+  # }
+
+
+
+  my @sleft = sort {$a <=> $b} @l;
+  my @sright= sort {$a <=> $b} @r;
 
   my $lmin = $sleft[0];
   my $rmin = $sright[0];
@@ -73,8 +81,8 @@ while (1) {
                abs($sright[0]-$sright[2]),
                abs($sright[2]-$sright[1]));
 
-  my @srdist = sort @rdist;
-  my @sldist = sort @ldist;
+  my @srdist = sort {$a <=> $b} @rdist;
+  my @sldist = sort {$a <=> $b} @ldist;
 
   if ($srdist[2] > 50) {
     $or = mymap($r[0],$sright[0],$sright[2],0,255);
@@ -139,9 +147,9 @@ sub mymap {
   if ($x == $in_max) {
      return $out_max;
   } elsif ($out_min < $out_max) {
-    return ($x - $in_min) * ($out_max - $out_min+1) / ($in_max - $in_min) + $out_min;
+    return int(($x - $in_min) * ($out_max - $out_min+1) / ($in_max - $in_min) + $out_min);
   } else {
-    return ($x - $in_min) * ($out_max - $out_min-1) / ($in_max - $in_min) + $out_min;
+    return int(($x - $in_min) * ($out_max - $out_min-1) / ($in_max - $in_min) + $out_min);
   }
 }
 
