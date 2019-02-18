@@ -2,7 +2,7 @@
 #
 
 $debug = 0;
-$background = 0;
+$background = 1;
 
 if (!$debug && $background) {
   use Proc::Daemon;
@@ -54,26 +54,23 @@ while (1) {
   # and read it in again
   my $gd = GD::Image->newFromJpeg($tmpfile);
 
-  # get color of pixel in top row, middle
+  # get rgb colorof two pixels on left and right side
 
   my @l= $gd->rgb($gd->getPixel(2,3));
   my @r= $gd->rgb($gd->getPixel(7,3));
 
-  # for ($i=0;$i<9;$i++) {
-  #   my @pixel = $gd->rgb($gd->getPixel(7,$i));
-  #   print "$i " . $pixel[0] . " " . $pixel[1] . " " . $pixel[2] . "\n ";
-  # }
 
-
-
+  # sort the color values (low -> high)
   my @sleft = sort {$a <=> $b} @l;
   my @sright= sort {$a <=> $b} @r;
 
+  # get the lowest and highest value
   my $lmin = $sleft[0];
   my $rmin = $sright[0];
   my $lmax = $sleft[2];
   my $rmax = $sright[2];
   
+ # get the differences between the color values
   my @ldist = (abs($sleft[0]-$sleft[1]),
                abs($sleft[0]-$sleft[2]),
                abs($sleft[2]-$sleft[1]));
@@ -81,9 +78,12 @@ while (1) {
                abs($sright[0]-$sright[2]),
                abs($sright[2]-$sright[1]));
 
+  # sort hihg -> low
   my @srdist = sort {$a <=> $b} @rdist;
   my @sldist = sort {$a <=> $b} @ldist;
 
+  # highest difference pretty big map all values from 0..255
+  # remove color with lowest value - two color mix
   if ($srdist[2] > 50) {
     $or = mymap($r[0],$sright[0],$sright[2],0,255);
     $og = mymap($r[1],$sright[0],$sright[2],0,255);
