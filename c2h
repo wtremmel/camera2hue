@@ -4,6 +4,7 @@
 $debug = 0;
 $background = 1;
 
+
 if (!$debug && $background) {
   use Proc::Daemon;
   $pid = Proc::Daemon::Init;
@@ -14,8 +15,15 @@ use Graphics::Magick;
 use GD;
 use Graphics::ColorObject;
 use Net::Ping;
+use Device::Hue;
+use Data::Dumper;
 
-# also needs https://www.floodgap.com/software/huepl/
+
+my $hue = Device::Hue-> new({
+	'bridge' => 'http://philips-hue.garf.de',
+	'key' => 'S6AsTyjBqvqSQBoo7SYlDzSvSsUJ-61XLhb4FgLO',
+	'debug' => $debug
+	});
 
 $infile = "/tmp/latest.jpg";
 $tmpfile = "/tmp/9x9.jpg";
@@ -89,14 +97,13 @@ while (1) {
     $og = mymap($r[1],$sright[0],$sright[2],0,255);
     $ob = mymap($r[2],$sright[0],$sright[2],0,255);
     $coltemp = 0;
-    print `huepl rgb $right $or $og $ob` if !$debug;
+    &dolamprgb($right,$or,$og,$ob) if !$debug;
   } else {
     $or = $r[0];
     $og = $r[1];
     $ob = $r[2];
     $coltemp = colTemp($or,$og,$ob);
-    print `huepl rgb $right $or $og $ob` if !$debug;
-    #print `huepl ct $right $coltemp` if !$debug;
+    &dolamprgb($right,$or,$og,$ob) if !$debug;
   }
   print "right $or $og $ob $coltemp\n" if $debug;
 
@@ -105,14 +112,13 @@ while (1) {
     $og = mymap($l[1],$sleft[0],$sleft[2],0,255);
     $ob = mymap($l[2],$sleft[0],$sleft[2],0,255);
     $coltemp = 0;
-    print `huepl rgb $left $or $og $ob` if !$debug;
+    &dolamprgb($left,$or,$og,$ob) if !$debug;
   } else {
     $or = $l[0];
     $og = $l[1];
     $ob = $l[2];
     $coltemp = colTemp($or,$og,$ob);
-    print `huepl rgb $left $or $og $ob` if !$debug;
-    #print `huepl ct $left $coltemp` if !$debug;
+    &dolamprgb($left,$or,$og,$ob) if !$debug;
   }
   print "left $or $og $ob $coltemp\n" if $debug;
 
@@ -125,10 +131,10 @@ while (1) {
     $noping++;
     if ($noping > 3) {
       # switch light to on
-      system("huepl bri $right 254");
-      system("huepl ct $right 367");
-      system("huepl bri $left 254");
-      system("huepl ct $left 367");
+      $hue->light($right)->bri(254);
+      $hue->light($right)->ct(367);
+      $hue->light($left)->bri(254);
+      $hue->light($left)->ct(367);
       &waitfortv;
       $noping = 0;
     }
@@ -140,6 +146,12 @@ sub waitfortv {
   while (!$tvping->ping($tv,5)) {
     sleep(1);
   }
+}
+
+sub dolamprgb {
+  my ($lamp, $r, $g, $b) = @_;
+
+  $hue->light($lamp)->rgb($r,$g,$b);
 }
 
 sub mymap {
