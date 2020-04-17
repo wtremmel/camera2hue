@@ -8,7 +8,12 @@ $background = 1;
 if (!$debug && $background) {
   use Proc::Daemon;
   $pid = Proc::Daemon::Init;
-  exit if $pid;
+  if ($pid) {
+    open(F,">/var/run/c2h.pid");
+    print F "$pid\n";
+    close F;
+    exit 0;
+  }
 }
 
 use Graphics::Magick;
@@ -21,16 +26,17 @@ use Data::Dumper;
 
 my $hue = Device::Hue-> new({
 	'bridge' => 'http://philips-hue.garf.de',
-	'key' => 'S6AsTyjBqvqSQBoo7SYlDzSvSsUJ-61XLhb4FgLO',
+	'key' => '',
 	'debug' => $debug
 	});
 
 $infile = "/tmp/latest.jpg";
 $tmpfile = "/tmp/9x9.jpg";
 $tmpfile2 = "/tmp/color.jpg";
-$tv = "tv.garf.de";
+$tv = "192.168.179.134";
 $right = 6;
 $left = 5;
+$threshold=20;
 
 $tvping = Net::Ping->new("icmp",2,0);
 
@@ -92,7 +98,7 @@ while (1) {
 
   # highest difference pretty big map all values from 0..255
   # remove color with lowest value - two color mix
-  if ($srdist[2] > 50) {
+  if ($srdist[2] > $threshold) {
     $or = mymap($r[0],$sright[0],$sright[2],0,255);
     $og = mymap($r[1],$sright[0],$sright[2],0,255);
     $ob = mymap($r[2],$sright[0],$sright[2],0,255);
@@ -107,7 +113,7 @@ while (1) {
   }
   print "right $or $og $ob $coltemp\n" if $debug;
 
-  if ($sldist[2] > 50) {
+  if ($sldist[2] > $threshold) {
     $or = mymap($l[0],$sleft[0],$sleft[2],0,255);
     $og = mymap($l[1],$sleft[0],$sleft[2],0,255);
     $ob = mymap($l[2],$sleft[0],$sleft[2],0,255);
@@ -129,7 +135,7 @@ while (1) {
   #
   if (!$tvping->ping($tv,1)) {
     $noping++;
-    if ($noping > 3) {
+    if ($noping > 1) {
       # switch light to on
       $hue->light($right)->bri(254);
       $hue->light($right)->ct(367);
@@ -151,7 +157,9 @@ sub waitfortv {
 sub dolamprgb {
   my ($lamp, $r, $g, $b) = @_;
 
-  $hue->light($lamp)->rgb($r,$g,$b);
+  if ($hue->light($lamp)->is_on()) {
+    $hue->light($lamp)->rgb($r,$g,$b);
+  }
 }
 
 sub mymap {
