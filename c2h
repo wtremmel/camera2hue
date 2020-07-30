@@ -26,7 +26,7 @@ use Data::Dumper;
 
 my $hue = Device::Hue-> new({
 	'bridge' => 'http://philips-hue.garf.de',
-	'key' => '',
+	'key' => 'S6AsTyjBqvqSQBoo7SYlDzSvSsUJ-61XLhb4FgLO',
 	'debug' => $debug
 	});
 
@@ -47,7 +47,8 @@ $noping = 0;
 while (1) {
  
   # Take picture of TV screen
-  system("raspistill -o $infile -drc high -mm matrix $EXPO -rot 90 -w 320 -h 240 -t 1");
+  # system("raspistill -o $infile -drc high -mm matrix $EXPO -w 320 -h 240 -t 1");
+  system("raspistill -o $infile -drc high -ifx saturation -mm matrix $EXPO -w 320 -h 240 -t 1");
 
   # Read picture into memory
   my $im = Graphics::Magick->new;
@@ -61,17 +62,18 @@ while (1) {
   # Generate 9x9 pixeliced version of picture
   # $im->Modulate(saturation => 800.0,brightness => 200.0, hue => 100.0);
   $im->Write($tmpfile2);
-  $im->Resize(width => 9, height => 9);
+  $im->Resize(width => 20, height => 20);
   # Write it to RAMdisk
   $im->Write($tmpfile);
+
 
   # and read it in again
   my $gd = GD::Image->newFromJpeg($tmpfile);
 
   # get rgb colorof two pixels on left and right side
 
-  my @l= $gd->rgb($gd->getPixel(2,3));
-  my @r= $gd->rgb($gd->getPixel(7,3));
+  my @l= $gd->rgb($gd->getPixel(2,10));
+  my @r= $gd->rgb($gd->getPixel(18,10));
 
 
   # sort the color values (low -> high)
